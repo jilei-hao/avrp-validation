@@ -1,0 +1,11 @@
+# ignores for python project
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ignores for cmake project
+build/
+CMakeFiles/
+CMakeCache.txt
+
