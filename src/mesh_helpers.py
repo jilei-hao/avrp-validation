@@ -40,3 +40,18 @@ def write_polydata(polydata, filename):
   writer.SetInputData(polydata)
   writer.SetFileName(filename)
   writer.Write()
+
+def compute_volume(polydata):
+  # compute the volume
+  mass = vtk.vtkMassProperties()
+  mass.SetInputData(polydata)
+  mass.Update()
+  volume = mass.GetVolume()
+  return volume
+
+def convert_to_triangle(polydata):
+  # convert the polydata to triangles
+  triangle = vtk.vtkTriangleFilter()
+  triangle.SetInputData(polydata)
+  triangle.Update()
+  return triangle.GetOutput()
