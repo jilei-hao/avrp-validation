@@ -57,3 +57,10 @@ def convert_to_triangle(polydata):
   triangle.SetInputData(polydata)
   triangle.Update()
   return triangle.GetOutput()
+
+def marching_cubes(image, threshold):
+  mc = vtk.vtkMarchingCubes()
+  mc.SetInputData(image)
+  mc.SetValue(0, threshold)
+  mc.Update()
+  return mc.GetOutput()

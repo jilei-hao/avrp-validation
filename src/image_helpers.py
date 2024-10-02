@@ -23,6 +23,24 @@ def read_image(filename):
   return reader.GetOutput()
 
 
+def write_image(image, filename):
+  # if filename ends iwth .vti, use vtkXMLImageDataWriter
+  if filename.endswith('.vti'):
+    writer = vtk.vtkXMLImageDataWriter()
+  # if filename ends iwth .mha, use vtkMetaImageWriter
+  elif filename.endswith('.mha'):
+    writer = vtk.vtkMetaImageWriter()
+  # if filename ends iwth .nii, use vtkNIFTIImageWriter
+  elif filename.endswith('.nii') or filename.endswith('.nii.gz'):
+    writer = vtk.vtkNIFTIImageWriter()
+  else:
+    raise ValueError('Unknown file format')
+  
+  writer.SetInputData(image)
+  writer.SetFileName(filename)
+  writer.Write()
+
+
 def compute_volume_chunk(voxels, start, end, volvox):
   volume = 0
   for i in range(start, end):
@@ -34,7 +52,6 @@ def compute_volume(image):
   # get the spacing of the image
   spacing = image.GetSpacing()
   dims = image.GetDimensions()
-  print("-- compute_volume: spacing:", spacing, "dims:", dims)
   
   # compute the volume of non-zero voxels
   volume = 0
@@ -63,7 +80,7 @@ def compute_surface_area_chunk(voxels, dims, spacing, xRange, yRange, zRange, la
   surface_cnt_XY = 0
   surface_cnt_XZ = 0
   surface_cnt_YZ = 0
-  
+
   for z in range(zRange[0], zRange[1]):
     for y in range(yRange[0], yRange[1]):
       for x in range(xRange[0], xRange[1]):

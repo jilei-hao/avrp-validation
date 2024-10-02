@@ -3,38 +3,126 @@ import image_helpers as ih
 import sys
 import time
 
-def validate_model(fn_image, fn_mesh):
-  # read the image
-  image = ih.read_image(fn_image)
-  
-  # compute the volume of the image
-  start_time = time.time()
-  volume_image = ih.compute_volume(image)
-  end_time = time.time()
-  print(f"Time spent computing volume of image: {end_time - start_time} seconds")
+# Define ANSI escape codes for colors
+RED = "\033[31m"
+GREEN = "\033[32m"
+RESET = "\033[0m"
+
+
+def generate_simple_model(image):
+  # generate a simple model
+  bimg = ih.threshold_image(image, 1, 999, 1.0, 0)
+  mesh = mh.marching_cubes(bimg, 0.5)
+  return mesh
+
+def print_failed(msg):
+  print(f"{RED}{msg}{RESET}", file=sys.stderr)
+
+
+def print_passed(msg):
+  print(f"{GREEN}{msg}{RESET}")
+
+
+def validate_result(title, result, tolerance):
+  passed = True
+  if (abs(result) > tolerance):
+    print_failed(f"-- Failed: ({title}) {result} exceeds tolerance of {tolerance}%")
+    passed = False
+  else:
+    print_passed(f"-- Passed: ({title}) {result} within tolerance of {tolerance}%")
+
+  return passed
+
+
+def validate_i2m(image, mesh, tolerance):
+  print("\n==== Validating image vs mesh ====\n")
 
   # compute the surface area of the image
   bimg = ih.threshold_image(image, 1, 999, 1, 0)
+
   start_time = time.time()
   surface_area_image = ih.compute_surface_area_from_image(bimg, 1)
   end_time = time.time()
-  print(f"Time spent computing surface area of image: {end_time - start_time} seconds")
+  print(f"-- (Performance) image surface area: {round(end_time - start_time, 3)}s")
 
+  start_time = time.time()
+  volume_image = ih.compute_volume(image)
+  end_time = time.time()
+  print(f"-- (Performance) image volume: {round(end_time - start_time, 3)}s")
+
+  # compute the surface area of the mesh
+  volume_mesh, surface_area_mesh = mh.compute_mass_properties(mesh)
+
+  # get diff
+  volume_diff = volume_mesh - volume_image
+  volume_diff_pct = round(volume_diff / volume_image * 100, 3)
+
+  surface_area_diff = surface_area_mesh - surface_area_image
+  surface_area_diff_pct = round(surface_area_diff / surface_area_image * 100, 3)
+
+  # print the results
+  print(f"-- Volume image: {volume_image}")
+  print(f"-- Volume mesh: {volume_mesh}")
+  print(f"-- Volume diff: {volume_diff} ({volume_diff_pct}%)")
+  i2m_vol_diff_tolerance = tolerance["vol_diff_pct_i2m"]
+  passed = validate_result("Volume i2m", volume_diff_pct, i2m_vol_diff_tolerance)
+
+  print(f"-- Surface area image: {surface_area_image}")
+  print(f"-- Surface area mesh: {surface_area_mesh}")
+  print(f"-- Surface area diff: {surface_area_diff} ({surface_area_diff_pct}%)")
+  i2m_area_diff_tolerance = tolerance["area_diff_pct_i2m"]
+  passed = validate_result("Surface Area i2m", surface_area_diff_pct, i2m_area_diff_tolerance)
+
+  return passed
+
+def validate_m2m(mesh_gt, mesh_in, tolerance):
+  print("\n==== Validating grount truth mesh vs mesh ====\n")
+
+  # compute the volume of the mesh_gt
+  volume_mesh_gt, surface_area_mesh_gt = mh.compute_mass_properties(mesh_gt)
+
+  # compute the volume of the mesh_in
+  volume_mesh_in, surface_area_mesh_in = mh.compute_mass_properties(mesh_in)
+
+  # get diff
+  volume_diff = volume_mesh_in - volume_mesh_gt
+  volume_diff_pct = round(volume_diff / volume_mesh_gt * 100, 3)
+
+  surface_area_diff = surface_area_mesh_in - surface_area_mesh_gt
+  surface_area_diff_pct = round(surface_area_diff / surface_area_mesh_gt * 100, 3)
+
+  # print the results
+  print(f"-- Volume ground truth mesh: {volume_mesh_gt}")
+  print(f"-- Volume input mesh: {volume_mesh_in}")
+  print(f"-- Volume diff: {volume_diff} ({volume_diff_pct}%)")
+  m2m_vol_diff_tolerance = tolerance["vol_diff_pct_m2m"]
+  passed = validate_result("Volume m2m", volume_diff_pct, m2m_vol_diff_tolerance)
+
+  print(f"-- Surface area ground truth mesh: {surface_area_mesh_gt}")
+  print(f"-- Surface area input mesh: {surface_area_mesh_in}")
+  print(f"-- Surface area diff: {surface_area_diff} ({surface_area_diff_pct}%)")
+  m2m_area_diff_tolerance = tolerance["area_diff_pct_m2m"]
+  passed = validate_result("Surface Area m2m", surface_area_diff_pct, m2m_area_diff_tolerance)
+
+  return passed
+
+
+def validate_model(fn_image, fn_mesh, tolerance):
+  # read the image
+  image = ih.read_image(fn_image)
+
+  # generate a ground truth model
+  gt_model = generate_simple_model(image)
   
   # read the mesh
   mesh = mh.read_polydata(fn_mesh)
   mesh = mh.convert_to_triangle(mesh)
 
-  # compute the volume of the mesh
-  volume_mesh, surface_area_mesh = mh.compute_mass_properties(mesh)
+  # compare image vs mesh
+  validate_i2m(image, mesh, tolerance)
 
-  print("Volume of image:", volume_image)
-  print("Surface area of image:", surface_area_image)
-  print("Volume of mesh:", volume_mesh)
-  print("Surface area of mesh:", surface_area_mesh)
-
-  # return the difference between the two volumes
-  return (volume_mesh - volume_image) // volume_image
+  # compare ground truth mesh vs mesh
+  validate_m2m(gt_model, mesh, tolerance)
 
 
 def main():
@@ -44,12 +132,14 @@ def main():
   
   # tolerance
   tolerance = {
-    "vol_diff_pct": 1,
-    "cent_of_mass_pct": 1
+    "vol_diff_pct_i2m": 1,
+    "area_diff_pct_i2m": 1,
+    "vol_diff_pct_m2m": 1,
+    "area_diff_pct_m2m": 1
     }
   
   # validate the model
-  diff = validate_model(fn_image, fn_mesh)
+  diff = validate_model(fn_image, fn_mesh, tolerance)
 
 if __name__ == '__main__':
   main()
