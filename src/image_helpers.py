@@ -3,7 +3,7 @@ import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 from vtk.util import numpy_support
 
-NUMBER_OF_JOBS = 4
+NUMBER_OF_JOBS = 8
 
 def read_image(filename):
   # if filename ends iwth .vti, use vtkXMLImageDataReader
@@ -41,7 +41,7 @@ def compute_volume(image):
   volvox = spacing[0] * spacing[1] * spacing[2]
   
   # Convert vtkUnsignedShortArray to NumPy array
-  voxels = vtk.util.numpy_support.vtk_to_numpy(image.GetPointData().GetScalars())
+  voxels = numpy_support.vtk_to_numpy(image.GetPointData().GetScalars())
   num_voxels = len(voxels)
   
   # Divide the work into 8 chunks
@@ -58,3 +58,75 @@ def compute_volume(image):
       volume += future.result()
   
   return volume
+
+def compute_surface_area_chunk(voxels, dims, spacing, xRange, yRange, zRange, label):
+  surface_cnt_XY = 0
+  surface_cnt_XZ = 0
+  surface_cnt_YZ = 0
+  
+  for z in range(zRange[0], zRange[1]):
+    for y in range(yRange[0], yRange[1]):
+      for x in range(xRange[0], xRange[1]):
+        if voxels[x, y, z] == label:
+          # Check the six neighbors
+          if x == 0 or voxels[x - 1, y, z] != label:
+            surface_cnt_YZ += 1
+          if x == dims[0] - 1 or voxels[x + 1, y, z] != label:
+            surface_cnt_YZ += 1
+          if y == 0 or voxels[x, y - 1, z] != label:
+            surface_cnt_XZ += 1
+          if y == dims[1] - 1 or voxels[x, y + 1, z] != label:
+            surface_cnt_XZ += 1
+          if z == 0 or voxels[x, y, z - 1] != label:
+            surface_cnt_XY += 1
+          if z == dims[2] - 1 or voxels[x, y, z + 1] != label:
+            surface_cnt_XY += 1
+
+  dx, dy, dz = spacing
+  area_XY = surface_cnt_XY * dx * dy
+  area_XZ = surface_cnt_XZ * dx * dz
+  area_YZ = surface_cnt_YZ * dy * dz
+
+  return area_XY + area_XZ + area_YZ
+
+def compute_surface_area_from_image(image, label):
+  # Get the dimensions of the image
+  dims = image.GetDimensions()
+  
+  # Convert vtkUnsignedShortArray to NumPy array
+  voxels = numpy_support.vtk_to_numpy(image.GetPointData().GetScalars())
+  voxels = voxels.reshape(dims, order='F')  # Reshape to 3D array with Fortran order
+  
+  futures = []
+
+  xMid = (dims[0] + 1) // 2
+  yMid = (dims[1] + 1) // 2
+  zMid = (dims[2] + 1) // 2
+
+  xRanges = [[0, xMid], [xMid, dims[0]]]
+  yRanges = [[0, yMid], [yMid, dims[1]]]
+  zRanges = [[0, zMid], [zMid, dims[2]]]
+
+  spacing = image.GetSpacing()
+  
+  with ProcessPoolExecutor(max_workers=NUMBER_OF_JOBS) as executor:
+
+    for xRange in xRanges:
+      for yRange in yRanges:
+        for zRange in zRanges:
+          futures.append(executor.submit(compute_surface_area_chunk, voxels, dims, spacing, xRange, yRange, zRange, label))
+
+    surface_area = sum(future.result() for future in futures)
+  
+  return surface_area
+
+def threshold_image (image, lower, upper, valueIn, valueOut):
+  # Create a vtkThreshold filter
+  threshold = vtk.vtkImageThreshold()
+  threshold.SetInputData(image)
+  threshold.ThresholdBetween(lower, upper)
+  threshold.SetInValue(valueIn)
+  threshold.SetOutValue(valueOut)
+  threshold.Update()
+  
+  return threshold.GetOutput()
