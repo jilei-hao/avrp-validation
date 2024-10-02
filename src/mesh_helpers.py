@@ -1,4 +1,5 @@
 import vtk
+import numpy as np
 
 def read_polydata(filename):
   # if filename ends iwth .vtk, use vtkPolyDataReader
@@ -64,3 +65,70 @@ def marching_cubes(image, threshold):
   mc.SetValue(0, threshold)
   mc.Update()
   return mc.GetOutput()
+
+def center_of_mass(polydata):
+  com = vtk.vtkCenterOfMass()
+  com.SetInputData(polydata)
+  com.SetUseScalarsAsWeights(False)
+  com.Update()
+  return com.GetCenter()
+
+def construct_nifti_sform(m_dir, v_origin, v_spacing):
+  # Set the NIFTI/RAS transform
+  m_scale = np.diag(v_spacing)
+  m_lps_to_ras = np.diag([1.0, 1.0, 1.0])
+  m_lps_to_ras[0, 0] = -1
+  m_lps_to_ras[1, 1] = -1
+  m_ras_matrix = m_lps_to_ras @ m_dir @ m_scale
+
+  # Compute the vector
+  v_ras_offset = m_lps_to_ras @ v_origin
+
+  # Create the larger matrix
+  vcol = np.ones(4)
+  vcol[:3] = v_ras_offset
+
+  m_sform = np.eye(4)
+  m_sform[:3, :3] = m_ras_matrix
+  m_sform[:4, 3] = vcol
+  return m_sform
+
+def construct_vtk_to_nifti_transform(m_dir, v_origin, v_spacing):
+  vox2nii = construct_nifti_sform(m_dir, v_origin, v_spacing)
+  vtk2vox = np.eye(4)
+  for i in range(3):
+      vtk2vox[i, i] = 1.0 / v_spacing[i]
+      vtk2vox[i, 3] = -v_origin[i] / v_spacing[i]
+
+  return vox2nii @ vtk2vox
+
+def print_methods(obj):
+  print([method for method in dir(obj) if callable(getattr(obj, method))])
+
+def get_vtk_to_nifti_transform(img3d):
+  vtk_dir_matrix = img3d.GetDirectionMatrix()
+  m_dir = np.zeros((3, 3))
+  for i in range(3):
+      for j in range(3):
+          m_dir[i, j] = vtk_dir_matrix.GetElement(i, j)
+
+  v_origin = np.array(img3d.GetOrigin())
+  v_spacing = np.array(img3d.GetSpacing())
+
+  print(img3d.GetDirectionMatrix().GetElement())
+
+  vtk2nii = construct_vtk_to_nifti_transform(m_dir, v_origin, v_spacing)
+
+  transform = vtk.vtkTransform()
+  transform.SetMatrix(vtk2nii.flatten())
+  transform.Update()
+
+  return transform
+
+def transform_mesh_to_image_space(mesh, image):
+  transform = get_vtk_to_nifti_transform(image)
+  transform_filter = vtk.vtkTransformPolyDataFilter()
+  transform_filter.SetInputData(mesh)
+  transform_filter.SetTransform(transform)
+  transform_filter.Update()
+  return transform_filter.GetOutput()

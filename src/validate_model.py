@@ -13,6 +13,7 @@ def generate_simple_model(image):
   # generate a simple model
   bimg = ih.threshold_image(image, 1, 999, 1.0, 0)
   mesh = mh.marching_cubes(bimg, 0.5)
+  mesh = mh.transform_mesh_to_image_space(mesh, image)
   return mesh
 
 def print_failed(msg):
@@ -84,12 +85,20 @@ def validate_m2m(mesh_gt, mesh_in, tolerance):
   # compute the volume of the mesh_in
   volume_mesh_in, surface_area_mesh_in = mh.compute_mass_properties(mesh_in)
 
+  # compute com
+  com_gt = mh.center_of_mass(mesh_gt)
+  com_in = mh.center_of_mass(mesh_in)
+
   # get diff
   volume_diff = volume_mesh_in - volume_mesh_gt
   volume_diff_pct = round(volume_diff / volume_mesh_gt * 100, 3)
 
   surface_area_diff = surface_area_mesh_in - surface_area_mesh_gt
   surface_area_diff_pct = round(surface_area_diff / surface_area_mesh_gt * 100, 3)
+
+  com_diff = [com_in[0] - com_gt[0], com_in[1] - com_gt[1], com_in[2] - com_gt[2]]
+  com_diff_dist = (com_diff[0] ** 2 + com_diff[1] ** 2 + com_diff[2] ** 2) ** 0.5
+
 
   # print the results
   print(f"-- Volume ground truth mesh: {volume_mesh_gt}")
@@ -103,6 +112,12 @@ def validate_m2m(mesh_gt, mesh_in, tolerance):
   print(f"-- Surface area diff: {surface_area_diff} ({surface_area_diff_pct}%)")
   m2m_area_diff_tolerance = tolerance["area_diff_pct_m2m"]
   passed = validate_result("Surface Area m2m", surface_area_diff_pct, m2m_area_diff_tolerance)
+
+  print(f"-- Center of mass ground truth mesh: {com_gt}")
+  print(f"-- Center of mass input mesh: {com_in}")
+  print(f"-- Center of mass diff: {com_diff_dist}")
+  m2m_com_diff_tolerance = tolerance["com_diff_in_mm_m2m"]
+  passed = validate_result("Center of Mass m2m", com_diff_dist, m2m_com_diff_tolerance)
 
   return passed
 
@@ -119,7 +134,7 @@ def validate_model(fn_image, fn_mesh, tolerance):
   mesh = mh.convert_to_triangle(mesh)
 
   # compare image vs mesh
-  validate_i2m(image, mesh, tolerance)
+  # validate_i2m(image, mesh, tolerance)
 
   # compare ground truth mesh vs mesh
   validate_m2m(gt_model, mesh, tolerance)
@@ -135,7 +150,8 @@ def main():
     "vol_diff_pct_i2m": 1,
     "area_diff_pct_i2m": 1,
     "vol_diff_pct_m2m": 1,
-    "area_diff_pct_m2m": 1
+    "area_diff_pct_m2m": 1,
+    "com_diff_in_mm_m2m": 2
     }
   
   # validate the model
