@@ -105,17 +105,16 @@ def construct_vtk_to_nifti_transform(m_dir, v_origin, v_spacing):
 def print_methods(obj):
   print([method for method in dir(obj) if callable(getattr(obj, method))])
 
-def get_vtk_to_nifti_transform(img3d):
-  vtk_dir_matrix = img3d.GetDirectionMatrix()
+def get_vtk_to_nifti_transform(itk_img):
+  dir = itk_img.GetDirection()
+
   m_dir = np.zeros((3, 3))
   for i in range(3):
       for j in range(3):
-          m_dir[i, j] = vtk_dir_matrix.GetElement(i, j)
+          m_dir[i, j] = dir(i, j)
 
-  v_origin = np.array(img3d.GetOrigin())
-  v_spacing = np.array(img3d.GetSpacing())
-
-  print(img3d.GetDirectionMatrix().GetElement())
+  v_origin = np.array(itk_img.GetOrigin())
+  v_spacing = np.array(itk_img.GetSpacing())
 
   vtk2nii = construct_vtk_to_nifti_transform(m_dir, v_origin, v_spacing)
 
@@ -125,8 +124,7 @@ def get_vtk_to_nifti_transform(img3d):
 
   return transform
 
-def transform_mesh_to_image_space(mesh, image):
-  transform = get_vtk_to_nifti_transform(image)
+def transform_mesh(mesh, transform):
   transform_filter = vtk.vtkTransformPolyDataFilter()
   transform_filter.SetInputData(mesh)
   transform_filter.SetTransform(transform)

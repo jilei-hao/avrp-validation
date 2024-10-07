@@ -1,7 +1,9 @@
+import itk
 import vtk
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 from vtk.util import numpy_support
+
 
 NUMBER_OF_JOBS = 8
 
@@ -14,13 +16,20 @@ def read_image(filename):
     reader = vtk.vtkMetaImageReader()
   # if filename ends iwth .nii, use vtkNIFTIImageReader
   elif filename.endswith('.nii') or filename.endswith('.nii.gz'):
-    reader = vtk.vtkNIFTIImageReader()
+    itk_img = read_as_itk_image(filename)
+    return itk_to_vtk(itk_img)
   else:
     raise ValueError('Unknown file format')
   
   reader.SetFileName(filename)
   reader.Update()
   return reader.GetOutput()
+
+def read_as_itk_image(filename):
+  return itk.imread(filename)
+
+def itk_to_vtk(itk_image):
+  return itk.vtk_image_from_image(itk_image)
 
 
 def write_image(image, filename):

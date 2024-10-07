@@ -9,11 +9,18 @@ GREEN = "\033[32m"
 RESET = "\033[0m"
 
 
-def generate_simple_model(image):
+def generate_simple_model(fn_image):
   # generate a simple model
-  bimg = ih.threshold_image(image, 1, 999, 1.0, 0)
+  vtk_img = ih.read_image(fn_image)
+  itk_img = ih.read_as_itk_image(fn_image)
+  bimg = ih.threshold_image(vtk_img, 1, 999, 1.0, 0)
   mesh = mh.marching_cubes(bimg, 0.5)
-  mesh = mh.transform_mesh_to_image_space(mesh, image)
+
+  # get transform from vtk to nifti
+  vtk2nii = mh.get_vtk_to_nifti_transform(itk_img)
+  print(vtk2nii)
+  mesh = mh.transform_mesh(mesh, vtk2nii)
+
   return mesh
 
 def print_failed(msg):
@@ -123,11 +130,10 @@ def validate_m2m(mesh_gt, mesh_in, tolerance):
 
 
 def validate_model(fn_image, fn_mesh, tolerance):
-  # read the image
-  image = ih.read_image(fn_image)
-
   # generate a ground truth model
-  gt_model = generate_simple_model(image)
+  gt_model = generate_simple_model(fn_image)
+  print(gt_model)
+  mh.write_polydata(gt_model, "/Users/jileihao/data/avrp-data/bavcta005-baseline/output/gt.vtp")
   
   # read the mesh
   mesh = mh.read_polydata(fn_mesh)
