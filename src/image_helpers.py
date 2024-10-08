@@ -156,3 +156,4 @@ def threshold_image (image, lower, upper, valueIn, valueOut):
   threshold.Update()
   
   return threshold.GetOutput()
+

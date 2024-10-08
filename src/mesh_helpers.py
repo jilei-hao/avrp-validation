@@ -130,3 +130,22 @@ def transform_mesh(mesh, transform):
   transform_filter.SetTransform(transform)
   transform_filter.Update()
   return transform_filter.GetOutput()
+
+
+def compute_average_distance(mesh1, mesh2):
+  distance_filter = vtk.vtkDistancePolyDataFilter()
+  distance_filter.SetInputData(0, mesh1)
+  distance_filter.SetInputData(1, mesh2)
+  distance_filter.Update()
+  out = distance_filter.GetOutput()
+
+  # get the distances array
+  distances = vtk.vtkDoubleArray.SafeDownCast(out.GetPointData().GetArray("Distance"))
+  num_points = distances.GetNumberOfTuples()
+
+  # compute the average distance
+  total_distance = 0
+  for i in range(num_points):
+    total_distance += distances.GetValue(i)
+
+  return total_distance / num_points

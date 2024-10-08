@@ -18,10 +18,9 @@ def generate_simple_model(fn_image):
 
   # get transform from vtk to nifti
   vtk2nii = mh.get_vtk_to_nifti_transform(itk_img)
-  print(vtk2nii)
   mesh = mh.transform_mesh(mesh, vtk2nii)
 
-  return mesh
+  return mesh, vtk_img
 
 def print_failed(msg):
   print(f"{RED}{msg}{RESET}", file=sys.stderr)
@@ -31,13 +30,13 @@ def print_passed(msg):
   print(f"{GREEN}{msg}{RESET}")
 
 
-def validate_result(title, result, tolerance):
+def validate_result(title, result, tolerance, unit):
   passed = True
   if (abs(result) > tolerance):
-    print_failed(f"-- Failed: ({title}) {result} exceeds tolerance of {tolerance}%")
+    print_failed(f"-- Failed: ({title}) {result}{unit} exceeds tolerance of {tolerance}{unit}")
     passed = False
   else:
-    print_passed(f"-- Passed: ({title}) {result} within tolerance of {tolerance}%")
+    print_passed(f"-- Passed: ({title}) {result}{unit} within tolerance of {tolerance}{unit}")
 
   return passed
 
@@ -73,13 +72,13 @@ def validate_i2m(image, mesh, tolerance):
   print(f"-- Volume mesh: {volume_mesh}")
   print(f"-- Volume diff: {volume_diff} ({volume_diff_pct}%)")
   i2m_vol_diff_tolerance = tolerance["vol_diff_pct_i2m"]
-  passed = validate_result("Volume i2m", volume_diff_pct, i2m_vol_diff_tolerance)
+  passed = validate_result("Volume i2m", volume_diff_pct, i2m_vol_diff_tolerance, "%")
 
   print(f"-- Surface area image: {surface_area_image}")
   print(f"-- Surface area mesh: {surface_area_mesh}")
   print(f"-- Surface area diff: {surface_area_diff} ({surface_area_diff_pct}%)")
   i2m_area_diff_tolerance = tolerance["area_diff_pct_i2m"]
-  passed = validate_result("Surface Area i2m", surface_area_diff_pct, i2m_area_diff_tolerance)
+  passed = validate_result("Surface Area i2m", surface_area_diff_pct, i2m_area_diff_tolerance, "%")
 
   return passed
 
@@ -95,6 +94,9 @@ def validate_m2m(mesh_gt, mesh_in, tolerance):
   # compute com
   com_gt = mh.center_of_mass(mesh_gt)
   com_in = mh.center_of_mass(mesh_in)
+
+  # compute distance
+  avg_dist = mh.compute_average_distance(mesh_gt, mesh_in)
 
   # get diff
   volume_diff = volume_mesh_in - volume_mesh_gt
@@ -112,27 +114,30 @@ def validate_m2m(mesh_gt, mesh_in, tolerance):
   print(f"-- Volume input mesh: {volume_mesh_in}")
   print(f"-- Volume diff: {volume_diff} ({volume_diff_pct}%)")
   m2m_vol_diff_tolerance = tolerance["vol_diff_pct_m2m"]
-  passed = validate_result("Volume m2m", volume_diff_pct, m2m_vol_diff_tolerance)
+  passed = validate_result("Volume m2m", volume_diff_pct, m2m_vol_diff_tolerance, "%")
 
   print(f"-- Surface area ground truth mesh: {surface_area_mesh_gt}")
   print(f"-- Surface area input mesh: {surface_area_mesh_in}")
   print(f"-- Surface area diff: {surface_area_diff} ({surface_area_diff_pct}%)")
   m2m_area_diff_tolerance = tolerance["area_diff_pct_m2m"]
-  passed = validate_result("Surface Area m2m", surface_area_diff_pct, m2m_area_diff_tolerance)
+  passed = validate_result("Surface Area m2m", surface_area_diff_pct, m2m_area_diff_tolerance, "%")
 
   print(f"-- Center of mass ground truth mesh: {com_gt}")
   print(f"-- Center of mass input mesh: {com_in}")
   print(f"-- Center of mass diff: {com_diff_dist}")
   m2m_com_diff_tolerance = tolerance["com_diff_in_mm_m2m"]
-  passed = validate_result("Center of Mass m2m", com_diff_dist, m2m_com_diff_tolerance)
+  passed = validate_result("Center of Mass m2m", com_diff_dist, m2m_com_diff_tolerance, "mm")
+
+  print(f"-- Average distance: {avg_dist}")
+  m2m_avg_dist_tolerance = tolerance["avg_dist_in_mm_m2m"]
+  passed = validate_result("Average Distance m2m", avg_dist, m2m_avg_dist_tolerance, "mm")
 
   return passed
 
 
 def validate_model(fn_image, fn_mesh, tolerance):
   # generate a ground truth model
-  gt_model = generate_simple_model(fn_image)
-  print(gt_model)
+  gt_model, vtk_img = generate_simple_model(fn_image)
   mh.write_polydata(gt_model, "/Users/jileihao/data/avrp-data/bavcta005-baseline/output/gt.vtp")
   
   # read the mesh
@@ -140,7 +145,7 @@ def validate_model(fn_image, fn_mesh, tolerance):
   mesh = mh.convert_to_triangle(mesh)
 
   # compare image vs mesh
-  # validate_i2m(image, mesh, tolerance)
+  validate_i2m(vtk_img, mesh, tolerance)
 
   # compare ground truth mesh vs mesh
   validate_m2m(gt_model, mesh, tolerance)
@@ -157,7 +162,8 @@ def main():
     "area_diff_pct_i2m": 1,
     "vol_diff_pct_m2m": 1,
     "area_diff_pct_m2m": 1,
-    "com_diff_in_mm_m2m": 2
+    "com_diff_in_mm_m2m": 2,
+    "avg_dist_in_mm_m2m": 1,
     }
   
   # validate the model
