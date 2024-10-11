@@ -83,7 +83,7 @@ def validate_i2m(image, mesh, tolerance):
   return passed
 
 def validate_m2m(mesh_gt, mesh_in, tolerance):
-  print("\n==== Validating grount truth mesh vs mesh ====\n")
+  print("\n==== Validating ground truth mesh vs mesh ====\n")
 
   # compute the volume of the mesh_gt
   volume_mesh_gt, surface_area_mesh_gt = mh.compute_mass_properties(mesh_gt)
@@ -138,7 +138,7 @@ def validate_m2m(mesh_gt, mesh_in, tolerance):
 def validate_model(fn_image, fn_mesh, tolerance):
   # generate a ground truth model
   gt_model, vtk_img = generate_simple_model(fn_image)
-  mh.write_polydata(gt_model, "/Users/jileihao/data/avrp-data/bavcta005-baseline/output/gt.vtp")
+  # mh.write_polydata(gt_model, "/Users/jileihao/data/avrp-data/bavcta005-baseline/output/gt.vtp")
   
   # read the mesh
   mesh = mh.read_polydata(fn_mesh)
