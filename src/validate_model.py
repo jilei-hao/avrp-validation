@@ -262,9 +262,9 @@ def main():
   passed, results = validate_model(fn_image, fn_mesh, tolerance)
 
   if passed:
-    print_passed("\n\n-- Model validation passed\n\n")
+    print_passed(f"\n\n-- Model validation passed: {fn_mesh}\n\n")
   else:
-    print_failed("\n\n-- Model validation failed\n\n")
+    print_failed(f"\n\n-- Model validation failed: {fn_mesh}\n\n")
 
 if __name__ == '__main__':
   main()
